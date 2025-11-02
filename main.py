@@ -11,17 +11,17 @@ import face_recognition
 ## VERY EXPERIMENTAL RIGHT NOW :DDD
 
 face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
-smile_cascade = cv2.CascadeClassifier('haarcascade_smile.xml')
+stopsign = cv2.CascadeClassifier('stop_sign_pjy.xml')
 
 from datetime import datetime
 
-cap = cv2.VideoCapture(0, cv2.CAP_AVFOUNDATION)
+cap = cv2.VideoCapture(1, cv2.CAP_AVFOUNDATION)
 #width = 480
 #height = 600
 
 #cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
 #cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-cap.set(cv2.CAP_PROP_FPS, 120)
+#cap.set(cv2.CAP_PROP_FPS, 240)
 
 while True:
     ret, frame1 = cap.read()
@@ -70,14 +70,14 @@ while True:
 
     gray = cv2.cvtColor(raw, cv2.COLOR_BGR2GRAY)
     face = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=2)
+    stopsigns = stopsign.detectMultiScale(gray, 1.3, 5)
+
+    for (x,y,w,h) in stopsigns:
+        cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),2)
     
-    for (x,y,w,h) in face:
-        cv2.rectangle(frame,(x,y),(x+w,y+h),(0,0,204),2)
-        gray_temp = gray[y:y+h, x:x+w]
-        smile = smile_cascade.detectMultiScale(gray_temp, scaleFactor= 1.4, minNeighbors=10)
-        for i in smile:
-            if len(smile)>1:
-                cv2.putText(frame,"smiling",(x,y-50),cv2.FONT_HERSHEY_PLAIN, 2,(255,0,0),3,cv2.LINE_AA)    
+    ##for (x,y,w,h) in face:
+        ##cv2.rectangle(frame,(x,y),(x+w,y+h),(0,0,204),2)
+        
     cv2.imshow("istem", frame)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
