@@ -1,3 +1,3 @@
 # Neo "ai" Helmet - iSTEM AT3 Assessment
 
-gen: https://drive.google.com/file/d/1ECFlupouTVMSk-GvWPFP55abdUFLPp4n/view?usp=sharing
+speed_zones.parquet https://drive.google.com/file/d/1ECFlupouTVMSk-GvWPFP55abdUFLPp4n/view?usp=sharing
