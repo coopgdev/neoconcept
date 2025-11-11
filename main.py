@@ -1,21 +1,78 @@
 
 ## Cooper Greene 2025
 
+# Imports
 import cv2
 import os
 import numpy as np
 from matplotlib import pyplot as plt
+from playsound3 import playsound
+from datetime import datetime
+import geocoder
+import requests
+from geopy.distance import distance
+import json
+from shapely.geometry import shape, Point
+import geopandas as gpd
 
-import face_recognition
+def get_current_location():
+    g = geocoder.ip('me')
+    if g.ok:
+        return g.latlng  # [latitude, longitude]
+    else:
+        raise Exception("Unable to determine current location.")
 
-## VERY EXPERIMENTAL RIGHT NOW :DDD
+lat, lon = get_current_location()
+print(f"Your current location: {lat}, {lon}")
+
+API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJrNmdvdWJoOFpBQ19jbWpYTlNBemFKemR1NUJjT2k1dWFoQjFWZ2haM0k4IiwiaWF0IjoxNzYyNTEyNTA0fQ.k2VZRUPA-WkdMyjYpYYhYl0lqc0SDxUT0UKxEton5wA"
+BASE_URL = "https://api.transport.nsw.gov.au/v1/live/hazards"
+
+def get_live_hazards(hazard_type="incident", status="open"):
+    url = f"{BASE_URL}/{hazard_type}/{status}"
+    headers = {"Authorization": f"apikey {API_KEY}"}
+    r = requests.get(url, headers=headers,verify=False)
+    r.raise_for_status()
+    return r.json()
+
+def filter_nearby_hazards(hazards, lat, lon, radius_km=5):
+    nearby = []
+    for feature in hazards.get("features", []):
+        coords = feature["geometry"]["coordinates"]
+        # GeoJSON coords are [lon, lat]
+        dist = distance((lat, lon), (coords[1], coords[0])).km
+        if dist <= radius_km:
+            feature["distance_km"] = round(dist, 2)
+            nearby.append(feature)
+    return nearby
+
+def get_speed_zone(lat, lon, gdf):
+    point = Point(lon, lat)
+    matches = gdf[gdf.contains(point)]
+    if not matches.empty:
+        return matches.iloc[0].to_dict()
+    return None
+
+hazards = get_live_hazards("incident", "open")
+print(f"Fetched {len(hazards.get('features', []))} live incidents.")
+
+nearby_hazards = filter_nearby_hazards(hazards, lat, lon)
+for h in nearby_hazards:
+    print(f"{h['properties']['headline']} - {h['distance_km']} km away")
+
+zone = get_speed_zone(lat, lon)
+if zone:
+    print(f"Current speed limit: {zone['SPEED_LIMIT']} km/h")
+else:
+    print("Could not determine speed zone.")
 
 face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
 stopsign = cv2.CascadeClassifier('stop_sign_pjy.xml')
 
-from datetime import datetime
-
 cap = cv2.VideoCapture(1, cv2.CAP_AVFOUNDATION)
+#cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+#cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+cap.set(cv2.CAP_PROP_FPS, 30) # Attempt to set FPS
 #width = 480
 #height = 600
 
@@ -73,6 +130,7 @@ while True:
     stopsigns = stopsign.detectMultiScale(gray, 1.3, 5)
 
     for (x,y,w,h) in stopsigns:
+        playsound('/Users/coopergreene/Downloads/sod.mp3', block=False)
         cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),2)
     
     ##for (x,y,w,h) in face:
