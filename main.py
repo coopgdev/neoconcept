@@ -17,7 +17,7 @@ from shapely.geometry import shape, Point
 import geopandas as gpd
 import sched, time
 import threading
-import warnings
+import textwrap
 
 print("iSTEM AT3 2025 - Cooper Greene")
 
@@ -87,7 +87,7 @@ def tfNSW_check(SPEED_ZONE):
 
     nearby_hazards = filter_nearby_hazards(hazards, lat, lon)
     for h in nearby_hazards:
-        print(f"{h['properties']['headline']} - {h['distance_km']} km away")
+        print(f"{h['properties']['displayName']} - {h['distance_km']} km away")
 
     zone = get_speed_zone(lat, lon, gdf)
     if zone:
@@ -97,7 +97,7 @@ def tfNSW_check(SPEED_ZONE):
     else:
         print("Could not determine speed zone.")
 
-    threading.Timer(35, tfNSW_check, args=[SPEED_ZONE]).start()
+    #threading.Timer(35, tfNSW_check, args=[SPEED_ZONE]).start()
     return SPEED_ZONE,hazards,nearby_hazards
 
 STOP_THREADS = False
@@ -150,24 +150,17 @@ while True:
     # Display the original and inverted images
 
     # Make overlay image same size as frame
-    overlay = frame.copy()
-
-    # Example: Semi-transparent rectangle at top
-    cv2.rectangle(overlay, (0, 0), (frame.shape[1], 50), (0, 0, 0), -1)  # black bar
+    
     alpha = 0.4  # transparency factor
 
     timer = frame.copy()
-    cv2.rectangle(timer, (800, 500), (500, 600), (0,0,0), -1)
+    cv2.rectangle(timer, (900, 50), (1200, 900), (0,0,0), -1)
+    #cv2.rectangle(img, pt1, pt2, color, thickness, lineType, shift)
 
     current_process_times = os.times()
 
     # Blend overlay with frame
     frame = cv2.addWeighted(timer, alpha, frame, 1 - 0.4, 0)
-    frame = cv2.addWeighted(overlay, alpha, frame, 1 - 0.4, 0)
-
-    # Add text on top
-    cv2.putText(frame, "test", (10, 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
     # Get the current local date and time
     current_datetime = datetime.now()
@@ -175,8 +168,52 @@ while True:
     # Extract only the time component
     formatted_time = current_datetime.strftime("%H:%M:%S")
 
-    cv2.putText(frame, f"{formatted_time}", (500, 600),
+    cv2.putText(frame, f"{formatted_time}", (900, 50),
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+    print(frame.shape)
+
+    height, width, channel = frame.shape
+
+    text_img = np.ones((height, width))
+    #print(text_img.shape)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    wrapped_text = []
+    for h in nearby_hazards:
+        print(wrapped_text)
+        n = textwrap.wrap(f"{h['properties']['displayName']} - {h['distance_km']} km away | ", width=15)
+        wrapped_text.extend(n)
+
+    font_size = 1
+    font_thickness = 2
+
+    y = 42
+
+    for i, line in enumerate(wrapped_text):
+        textsize = cv2.getTextSize(line, font, font_size, font_thickness)[0]
+
+        gap = textsize[1] + 10
+
+        y = int((frame.shape[0] + textsize[1]) / 2) + i * gap
+        x = 900
+        #print(x, y)
+
+        cv2.putText(frame, line, (x, y), font,
+                    font_size, 
+                    (255,255,255), 
+                    font_thickness, 
+                    lineType = cv2.LINE_AA)
+
+    
+    if SPEED_ZONE:
+        speedzone = SPEED_ZONE.replace(" km/h","")
+    else:
+        #print("No speed zone!")
+        speedzone = "???"
+
+    cv2.circle(frame,(1050,150), 63, (0,0,255), 5)
+    cv2.putText(frame, f"{speedzone}", (1050, 150),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.67, (0, 0, 0), 2)
 
 
     # Example crosshair
@@ -195,16 +232,6 @@ while True:
     
     for (x,y,w,h) in face:
         cv2.rectangle(frame,(x,y),(x+w,y+h),(0,0,204),2)
-
-    if SPEED_ZONE:
-        speedzone = SPEED_ZONE.replace(" km/h","")
-    else:
-        #print("No speed zone!")
-        speedzone = "0"
-
-    cv2.circle(frame,(447,63), 63, (0,0,255), 5)
-    cv2.putText(frame, f"{speedzone}", (425, 70),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
     
     #cv2.putText(image, text, org, fontFace, fontScale, color, thickness, lineType, bottomLeftOrigin)
 
@@ -218,6 +245,7 @@ while True:
 
 
 STOP_THREADS = True
+print("Exiting threads")
 cap.release()
 cv2.destroyAllWindows()
 cv2.waitKey(1)
