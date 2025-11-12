@@ -78,8 +78,9 @@ def tfNSW_check(SPEED_ZONE):
     # schedule the next call first
     lat, lon = get_current_location()
 
-    #lat = -34.023267
-    #lon = 150.824316
+    #lat = -34.063735
+    #lon = 150.731770
+
     print(f"Your current location: {lat}, {lon}\n")
     print("check")
     hazards = get_live_hazards("incident", "open")
@@ -97,7 +98,7 @@ def tfNSW_check(SPEED_ZONE):
     else:
         print("Could not determine speed zone.")
 
-    #threading.Timer(35, tfNSW_check, args=[SPEED_ZONE]).start()
+    threading.Timer(15, tfNSW_check, args=[SPEED_ZONE]).start()
     return SPEED_ZONE,hazards,nearby_hazards
 
 STOP_THREADS = False
@@ -168,10 +169,10 @@ while True:
     # Extract only the time component
     formatted_time = current_datetime.strftime("%H:%M:%S")
 
-    cv2.putText(frame, f"{formatted_time}", (900, 50),
+    cv2.putText(frame, f"{formatted_time}", (1050, 850),
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
-    print(frame.shape)
+    #print(frame.shape)
 
     height, width, channel = frame.shape
 
@@ -180,21 +181,20 @@ while True:
     font = cv2.FONT_HERSHEY_SIMPLEX
     wrapped_text = []
     for h in nearby_hazards:
-        print(wrapped_text)
+        #print(wrapped_text)
         n = textwrap.wrap(f"{h['properties']['displayName']} - {h['distance_km']} km away | ", width=15)
         wrapped_text.extend(n)
 
     font_size = 1
     font_thickness = 2
 
-    y = 42
-
     for i, line in enumerate(wrapped_text):
         textsize = cv2.getTextSize(line, font, font_size, font_thickness)[0]
+        #print(textsize)
 
         gap = textsize[1] + 10
 
-        y = int((frame.shape[0] + textsize[1]) / 2) + i * gap
+        y = int((547 + textsize[1]) / 2) + i * gap
         x = 900
         #print(x, y)
 
@@ -211,8 +211,9 @@ while True:
         #print("No speed zone!")
         speedzone = "???"
 
-    cv2.circle(frame,(1050,150), 63, (0,0,255), 5)
-    cv2.putText(frame, f"{speedzone}", (1050, 150),
+    cv2.circle(frame,(1050,150), 63, (0,0,255), 7)
+    cv2.circle(frame, center=(1050, 150), radius=63, color=(255, 255, 255), thickness=-1)  # Filled Blue Circle
+    cv2.putText(frame, f"{speedzone}", (1030, 155),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.67, (0, 0, 0), 2)
 
 
