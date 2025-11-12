@@ -17,6 +17,9 @@ from shapely.geometry import shape, Point
 import geopandas as gpd
 import sched, time
 import threading
+import warnings
+
+print("iSTEM AT3 2025 - Cooper Greene")
 
 def get_current_location():
     g = geocoder.ip('me')
@@ -42,15 +45,42 @@ def filter_nearby_hazards(hazards, lat, lon, radius_km=5):
             nearby.append(feature)
     return nearby
 
-def get_speed_zone(lat, lon, gdf):
-    point = Point(lon, lat)
-    matches = gdf[gdf.contains(point)]
-    if not matches.empty:
-        return matches.iloc[0].to_dict()
-    return None
+def get_speed_zone(lat, lon, gdf, tolerance=10):
+    # ensure WGS84 coords
+    if gdf.crs != "EPSG:4326":
+        gdf = gdf.to_crs("EPSG:4326")
 
-def tfNSW_check(): 
+    point = Point(lon, lat)
+
+    # spatial index filter first
+    idx = list(gdf.sindex.intersection(point.bounds))
+    matches = gdf.iloc[idx]
+
+    # compute distance to each line
+    matches["dist"] = matches.geometry.distance(point)
+
+    # pick closest road segment
+    nearest = matches.loc[matches["dist"].idxmin()]
+
+    # if too far, assume not a road match
+    # ~0.0001 degrees ≈ 11 m
+    if nearest["dist"] > 0.0001:
+        return None
+
+    return nearest.to_dict()
+
+SPEED_ZONE = None
+
+def tfNSW_check(SPEED_ZONE):
+    if STOP_THREADS:
+        print("\nexit()")
+        return
     # schedule the next call first
+    lat, lon = get_current_location()
+
+    #lat = -34.023267
+    #lon = 150.824316
+    print(f"Your current location: {lat}, {lon}\n")
     print("check")
     hazards = get_live_hazards("incident", "open")
     print(f"Fetched {len(hazards.get('features', []))} live incidents.")
@@ -61,29 +91,41 @@ def tfNSW_check():
 
     zone = get_speed_zone(lat, lon, gdf)
     if zone:
-        print(f"Current speed limit: {zone['SPEED_LIMIT']} km/h")
+        print(f"Current speed limit: {zone['Speed']} km/h")
+        SPEED_ZONE = zone['Speed']
+        print(SPEED_ZONE)
     else:
         print("Could not determine speed zone.")
 
-    threading.Timer(35, tfNSW_check).start()
+    threading.Timer(35, tfNSW_check, args=[SPEED_ZONE]).start()
+    return SPEED_ZONE,hazards,nearby_hazards
 
-lat, lon = get_current_location()
-print(f"Your current location: {lat}, {lon}")
-
+STOP_THREADS = False
 API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJrNmdvdWJoOFpBQ19jbWpYTlNBemFKemR1NUJjT2k1dWFoQjFWZ2haM0k4IiwiaWF0IjoxNzYyNTEyNTA0fQ.k2VZRUPA-WkdMyjYpYYhYl0lqc0SDxUT0UKxEton5wA"
 BASE_URL = "https://api.transport.nsw.gov.au/v1/live/hazards"
+
 print("\ninit...")
 
 gdf = gpd.read_parquet("speed_zones.parquet")
-tfNSW_check()
+print(gdf.crs)
+# Fix CRS
+if gdf.crs is None:
+    gdf.set_crs("EPSG:4326", inplace=True)
+if gdf.crs.to_string() != "EPSG:4326":
+    gdf = gdf.to_crs(epsg=4326)
+print(gdf.total_bounds)
 
-print("ok doen that shit")
+SPEED_ZONE,hazards,nearby_hazards = tfNSW_check(SPEED_ZONE)
+
+print("Starting lfCamera")
 
 face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
 stopsign = cv2.CascadeClassifier('stop_sign_pjy.xml')
 
 if sys.platform == 'darwin':
     cap = cv2.VideoCapture(1, cv2.CAP_AVFOUNDATION)
+    if not cap:
+        cap = cv2.VideoCapture(0, cv2.CAP_AVFOUNDATION)
 else:
     cap = cv2.VideoCapture(0)
 
@@ -114,7 +156,7 @@ while True:
     cv2.rectangle(overlay, (0, 0), (frame.shape[1], 50), (0, 0, 0), -1)  # black bar
     alpha = 0.4  # transparency factor
 
-    timer = frame.copy()    
+    timer = frame.copy()
     cv2.rectangle(timer, (800, 500), (500, 600), (0,0,0), -1)
 
     current_process_times = os.times()
@@ -147,17 +189,35 @@ while True:
     stopsigns = stopsign.detectMultiScale(gray, 1.3, 5)
 
     for (x,y,w,h) in stopsigns:
-        playsound('sod.mp3', block=False)
+        #playsound('sod.mp3', block=False)
+        print("Stop sign!")
         cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),2)
     
-    ##for (x,y,w,h) in face:
-        ##cv2.rectangle(frame,(x,y),(x+w,y+h),(0,0,204),2)
+    for (x,y,w,h) in face:
+        cv2.rectangle(frame,(x,y),(x+w,y+h),(0,0,204),2)
+
+    if SPEED_ZONE:
+        speedzone = SPEED_ZONE.replace(" km/h","")
+    else:
+        #print("No speed zone!")
+        speedzone = "0"
+
+    cv2.circle(frame,(447,63), 63, (0,0,255), 5)
+    cv2.putText(frame, f"{speedzone}", (425, 70),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
+    
+    #cv2.putText(image, text, org, fontFace, fontScale, color, thickness, lineType, bottomLeftOrigin)
+
+    #cv2.circle(frame, (447, 63), radius, color, thickness)
         
-    cv2.imshow("istem", frame)
+    cv2.imshow("NEO lfCamera", frame)
+    #print(SPEED_ZONE)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
+
+STOP_THREADS = True
 cap.release()
 cv2.destroyAllWindows()
-exit()
+cv2.waitKey(1)
